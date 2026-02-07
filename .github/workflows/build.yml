@@ -1,55 +1,41 @@
-name: Build n8n workflow JSON
+name: build
 
 on:
   workflow_dispatch:
   push:
     paths:
+      - "workflow_spec.txt"
       - "scripts/**"
-      - ".github/workflows/**"
+      - ".github/workflows/build.yml"
 
 jobs:
-  build:
+  gen:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: "20"
 
-      - name: Generate + validate workflow.json (n8n import)
+      - run: npm ci
+
+      - name: Generate workflow.json
         env:
+          MODEL_PROVIDER: ${{ secrets.MODEL_PROVIDER }}
+          MODEL_NAME: ${{ secrets.MODEL_NAME }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          OPENAI_MODEL: ${{ secrets.OPENAI_MODEL }}
-          OPENAI_BASE_URL: ${{ secrets.OPENAI_BASE_URL }}
-          MAX_TRIES: "3"
-          OUT_PATH: "workflows/workflow.json"
-          # n8n needs this to run import reliably in CI
-          N8N_ENCRYPTION_KEY: ${{ secrets.N8N_ENCRYPTION_KEY }}
-          # Your spec goes here (keep it in repo for versioning)
-          WORKFLOW_SPEC: ${{ secrets.WORKFLOW_SPEC }}
-        run: |
-          python scripts/generate_workflow.py
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          N8N_VERSION: ${{ secrets.N8N_VERSION }}
+        run: npm run gen
+
+      - name: Validate workflow.json
+        run: npm run val
 
       - name: Commit workflow.json
         run: |
-          git status --porcelain
-          if [ -n "$(git status --porcelain)" ]; then
-            git config user.name "github-actions"
-            git config user.email "github-actions@github.com"
-            git add workflows/workflow.json
-            git commit -m "Update workflows/workflow.json (validated)"
-            git push
-          else
-            echo "No changes."
-          fi
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git add workflow.json
+          git commit -m "Update workflow.json" || exit 0
+          git push
