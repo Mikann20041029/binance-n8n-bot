@@ -1,112 +1,69 @@
-import os, json, sys, textwrap, subprocess
-from typing import Tuple
+import fs from "fs";
+import OpenAI from "openai";
 
-# Requirements:
-# - env: OPENAI_API_KEY
-# - optional env: OPENAI_BASE_URL (default https://api.openai.com/v1)
-# - optional env: OPENAI_MODEL (default gpt-4.1-mini or gpt-4.1)
-#
-# This script:
-# 1) Asks model to output STRICT JSON only (no markdown)
-# 2) Writes workflows/workflow.json
-# 3) Runs n8n import validation
-# 4) If fail, feeds error back and retries up to MAX_TRIES
+const provider = process.env.MODEL_PROVIDER || "openai";
+const model = process.env.MODEL_NAME || (provider === "openai" ? "gpt-4.1-mini" : "deepseek-chat");
+const apiKey =
+  provider === "openai" ? process.env.OPENAI_API_KEY :
+  provider === "deepseek" ? process.env.DEEPSEEK_API_KEY :
+  null;
 
-MAX_TRIES = int(os.getenv("MAX_TRIES", "3"))
-OUT_PATH = os.getenv("OUT_PATH", "workflows/workflow.json")
+if (!apiKey) {
+  console.error("Missing API key env. Set OPENAI_API_KEY or DEEPSEEK_API_KEY");
+  process.exit(1);
+}
 
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
-OPENAI_BASE_URL = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
-OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4.1")
+const baseURL =
+  provider === "deepseek" ? "https://api.deepseek.com" :
+  undefined;
 
-if not OPENAI_API_KEY:
-    print("Missing OPENAI_API_KEY", file=sys.stderr)
-    sys.exit(2)
+const client = new OpenAI({ apiKey, baseURL });
 
-SPEC = os.getenv("WORKFLOW_SPEC", "").strip()
-if not SPEC:
-    print("Missing WORKFLOW_SPEC env", file=sys.stderr)
-    sys.exit(2)
+const spec = fs.readFileSync("workflow_spec.txt", "utf-8");
 
-SYSTEM = (
-    "You generate n8n importable workflow JSON. Output MUST be valid JSON only. "
-    "No markdown. No comments. Use ASCII quotes only. No ellipsis char. "
-    "Target n8n version 2.6.3. "
-    "Avoid unknown properties: do not use 'option' if node expects 'options'. "
-    "Use correct node typeVersion and parameter schema."
-)
+// 重要：ここで「JSONだけ返せ」を徹底する
+const prompt = `
+You are generating an n8n workflow import JSON for n8n version ${process.env.N8N_VERSION || "2.6.3"}.
 
-def call_openai(messages) -> str:
-    # Uses curl to avoid adding dependencies.
-    payload = {
-        "model": OPENAI_MODEL,
-        "messages": messages,
-        "temperature": 0.2,
-    }
-    p = subprocess.run(
-        ["curl", "-sS", f"{OPENAI_BASE_URL}/chat/completions",
-         "-H", f"Authorization: Bearer {OPENAI_API_KEY}",
-         "-H", "Content-Type: application/json",
-         "-d", json.dumps(payload)],
-        capture_output=True, text=True
-    )
-    if p.returncode != 0:
-        print(p.stderr, file=sys.stderr)
-        sys.exit(3)
-    data = json.loads(p.stdout)
-    return data["choices"][0]["message"]["content"]
+Hard rules:
+- Output MUST be a single JSON object, no markdown, no code fences, no commentary.
+- Use only plain ASCII quotes (").
+- Do NOT include ellipsis characters.
+- Include: name, nodes, connections, settings, active.
+- Every node must have: id, name, type, typeVersion, position [x,y], parameters.
+- Do not use unknown properties like "option". Use "options" only when the node supports it.
 
-def validate_with_n8n(path: str) -> Tuple[bool, str]:
-    # Validate by importing into a temp n8n user folder
-    env = os.environ.copy()
-    env["N8N_USER_FOLDER"] = os.path.abspath(".n8n_tmp")
-    env["N8N_ENCRYPTION_KEY"] = env.get("N8N_ENCRYPTION_KEY", "test-encryption-key-32chars!!")
-    # n8n import will exit non-zero if schema invalid
-    p = subprocess.run(
-        ["npx", "--yes", "n8n", "import:workflow", "--input", path],
-        capture_output=True, text=True, env=env
-    )
-    ok = (p.returncode == 0)
-    out = (p.stdout or "") + "\n" + (p.stderr or "")
-    return ok, out.strip()
+WORKFLOW SPEC:
+${spec}
+`.trim();
 
-def main():
-    last_error = ""
-    for i in range(1, MAX_TRIES + 1):
-        user_prompt = SPEC
-        if last_error:
-            user_prompt += "\n\nFAILED IMPORT ERROR (fix and output corrected JSON):\n" + last_error
+// OpenAIなら response_format を使って強制（DeepSeekで効かない場合があるので後段で抽出もする）
+const res = await client.responses.create({
+  model,
+  input: prompt,
+  temperature: 0,
+  // OpenAIで強い。DeepSeekで無視されても害は少ない。
+  response_format: { type: "json_object" }
+});
 
-        messages = [
-            {"role": "system", "content": SYSTEM},
-            {"role": "user", "content": user_prompt},
-        ]
+const text = res.output_text?.trim() ?? "";
+if (!text) {
+  console.error("Model returned empty output");
+  process.exit(1);
+}
 
-        content = call_openai(messages).strip()
+// DeepSeek等で余計な文字が混じった時の保険：最初の{〜最後の}抽出
+const i = text.indexOf("{");
+const j = text.lastIndexOf("}");
+const sliced = (i >= 0 && j >= 0 && j > i) ? text.slice(i, j + 1) : text;
 
-        # Hard guard: must be JSON object
-        try:
-            obj = json.loads(content)
-        except Exception as e:
-            last_error = f"Model output was not valid JSON. json.loads error: {e}"
-            print(f"[try {i}] invalid JSON from model", file=sys.stderr)
-            continue
+let obj;
+try {
+  obj = JSON.parse(sliced);
+} catch (e) {
+  console.error("invalid JSON from model:", e.message);
+  process.exit(1);
+}
 
-        os.makedirs(os.path.dirname(OUT_PATH), exist_ok=True)
-        with open(OUT_PATH, "w", encoding="utf-8") as f:
-            json.dump(obj, f, ensure_ascii=False, indent=2)
-
-        ok, log = validate_with_n8n(OUT_PATH)
-        if ok:
-            print(f"OK: validated and wrote {OUT_PATH}")
-            return  # success
-
-        last_error = log
-        print(f"[try {i}] n8n import failed:\n{log}\n", file=sys.stderr)
-
-    print("FAILED: could not produce a valid importable workflow JSON", file=sys.stderr)
-    print("Last error:\n" + last_error, file=sys.stderr)
-    sys.exit(1)
-
-if __name__ == "__main__":
-    main()
+fs.writeFileSync("workflow.json", JSON.stringify(obj, null, 2));
+console.log("Wrote workflow.json");
