@@ -1,23 +1,18 @@
 import fs from "fs";
 import OpenAI from "openai";
 
-const provider = process.env.MODEL_PROVIDER || "openai";
-const model = process.env.MODEL_NAME || (provider === "openai" ? "gpt-4.1-mini" : "deepseek-chat");
-const apiKey =
-  provider === "openai" ? process.env.OPENAI_API_KEY :
-  provider === "deepseek" ? process.env.DEEPSEEK_API_KEY :
-  null;
-
+// DeepSeek 固定
+const apiKey = process.env.DEEPSEEK_API_KEY;
 if (!apiKey) {
-  console.error("Missing API key env. Set OPENAI_API_KEY or DEEPSEEK_API_KEY");
+  console.error("Missing DEEPSEEK_API_KEY (GitHub Actions Secret)");
   process.exit(1);
 }
 
-const baseURL =
-  provider === "deepseek" ? "https://api.deepseek.com" :
-  undefined;
+const baseURL = "https://api.deepseek.com";
+const model = process.env.MODEL_NAME || "deepseek-chat";
 
 const client = new OpenAI({ apiKey, baseURL });
+
 
 const spec = fs.readFileSync("workflow_spec.txt", "utf-8");
 
