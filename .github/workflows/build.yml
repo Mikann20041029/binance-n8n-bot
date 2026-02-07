@@ -23,10 +23,12 @@ jobs:
       - name: Generate workflow.json
         run: npm run gen
         env:
-          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          MODEL_PROVIDER: deepseek
           MODEL_NAME: deepseek-chat
+          OPENAI_BASE_URL: https://api.deepseek.com
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
           N8N_VERSION: ${{ secrets.N8N_VERSION }}
-          run: npm run gen
+
 
       - name: Validate workflow.json
         run: npm run val
