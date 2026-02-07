@@ -4,7 +4,7 @@
     {
       "id": "start",
       "name": "Start",
-      "type": "n8n-nodes-base.manualTrigger",
+      "type": "n8n-nodes-base.start",
       "typeVersion": 1,
       "position": [
         100,
@@ -22,7 +22,20 @@
         300
       ],
       "parameters": {
-        "jsCode": "return [\n  { symbol: 'BTCUSDT' },\n  { symbol: 'ETHUSDT' },\n  { symbol: 'BNBUSDT' },\n  { symbol: 'SOLUSDT' },\n  { symbol: 'XRPUSDT' },\n  { symbol: 'ADAUSDT' },\n  { symbol: 'DOGEUSDT' },\n  { symbol: 'AVAXUSDT' },\n  { symbol: 'LINKUSDT' },\n  { symbol: 'MATICUSDT' },\n  { symbol: 'TRXUSDT' },\n  { symbol: 'DOTUSDT' }\n];"
+        "jsCode": "const symbols = ['BTCUSDT','ETHUSDT','BNBUSDT','SOLUSDT','XRPUSDT','ADAUSDT','DOGEUSDT','AVAXUSDT','LINKUSDT','MATICUSDT','TRXUSDT','DOTUSDT'];\nreturn symbols.map(symbol => ({ json: { symbol } }));"
+      }
+    },
+    {
+      "id": "splitInBatches",
+      "name": "Split In Batches",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 1,
+      "position": [
+        500,
+        300
+      ],
+      "parameters": {
+        "batchSize": 1
       }
     },
     {
@@ -31,29 +44,114 @@
       "type": "n8n-nodes-base.binance",
       "typeVersion": 2,
       "position": [
-        500,
-        200
+        700,
+        100
       ],
       "parameters": {
-        "resource": "spot",
+        "resource": "ticker",
         "operation": "price",
         "symbol": "={{$json.symbol}}"
       }
     },
     {
-      "id": "binanceCandles",
-      "name": "Binance Candles",
+      "id": "binanceCandles1m",
+      "name": "Binance Candles 1m",
       "type": "n8n-nodes-base.binance",
       "typeVersion": 2,
       "position": [
-        500,
+        700,
+        200
+      ],
+      "parameters": {
+        "resource": "candlestick",
+        "operation": "get",
+        "symbol": "={{$json.symbol}}",
+        "interval": "1m",
+        "limit": 100
+      }
+    },
+    {
+      "id": "binanceCandles5m",
+      "name": "Binance Candles 5m",
+      "type": "n8n-nodes-base.binance",
+      "typeVersion": 2,
+      "position": [
+        700,
+        300
+      ],
+      "parameters": {
+        "resource": "candlestick",
+        "operation": "get",
+        "symbol": "={{$json.symbol}}",
+        "interval": "5m",
+        "limit": 100
+      }
+    },
+    {
+      "id": "binanceCandles15m",
+      "name": "Binance Candles 15m",
+      "type": "n8n-nodes-base.binance",
+      "typeVersion": 2,
+      "position": [
+        700,
         400
       ],
       "parameters": {
-        "resource": "spot",
-        "operation": "candles",
+        "resource": "candlestick",
+        "operation": "get",
         "symbol": "={{$json.symbol}}",
-        "interval": "1m",
+        "interval": "15m",
+        "limit": 100
+      }
+    },
+    {
+      "id": "binanceCandles1h",
+      "name": "Binance Candles 1h",
+      "type": "n8n-nodes-base.binance",
+      "typeVersion": 2,
+      "position": [
+        700,
+        500
+      ],
+      "parameters": {
+        "resource": "candlestick",
+        "operation": "get",
+        "symbol": "={{$json.symbol}}",
+        "interval": "1h",
+        "limit": 100
+      }
+    },
+    {
+      "id": "binanceCandles4h",
+      "name": "Binance Candles 4h",
+      "type": "n8n-nodes-base.binance",
+      "typeVersion": 2,
+      "position": [
+        700,
+        600
+      ],
+      "parameters": {
+        "resource": "candlestick",
+        "operation": "get",
+        "symbol": "={{$json.symbol}}",
+        "interval": "4h",
+        "limit": 100
+      }
+    },
+    {
+      "id": "binanceCandles1d",
+      "name": "Binance Candles 1d",
+      "type": "n8n-nodes-base.binance",
+      "typeVersion": 2,
+      "position": [
+        700,
+        700
+      ],
+      "parameters": {
+        "resource": "candlestick",
+        "operation": "get",
+        "symbol": "={{$json.symbol}}",
+        "interval": "1d",
         "limit": 100
       }
     },
@@ -63,14 +161,14 @@
       "type": "n8n-nodes-base.binance",
       "typeVersion": 2,
       "position": [
-        700,
-        200
+        900,
+        300
       ],
       "parameters": {
-        "resource": "spot",
-        "operation": "orderBook",
+        "resource": "orderBook",
+        "operation": "get",
         "symbol": "={{$json.symbol}}",
-        "limit": 20
+        "depth": 20
       }
     },
     {
@@ -79,56 +177,82 @@
       "type": "n8n-nodes-base.binance",
       "typeVersion": 2,
       "position": [
-        700,
-        400
+        900,
+        500
       ],
       "parameters": {
-        "resource": "spot",
-        "operation": "trades",
+        "resource": "trade",
+        "operation": "get",
         "symbol": "={{$json.symbol}}",
         "limit": 100
       }
     },
     {
-      "id": "aggregateData",
-      "name": "Aggregate Data",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        900,
-        300
-      ],
-      "parameters": {
-        "jsCode": "const item = $input.first().json;\nreturn [{\n  symbol: item.symbol,\n  price: item.price,\n  candles: item.candles,\n  orderBook: item.orderBook,\n  trades: item.trades,\n  timestamp: new Date().toISOString()\n}];"
-      }
-    },
-    {
-      "id": "calculateScore",
-      "name": "Calculate Score",
-      "type": "n8n-nodes-base.code",
+      "id": "mergeData",
+      "name": "Merge Data",
+      "type": "n8n-nodes-base.merge",
       "typeVersion": 2,
       "position": [
         1100,
         300
       ],
       "parameters": {
-        "jsCode": "const data = $input.first().json;\n// Gate conditions\nconst volume = data.trades.reduce((sum, t) => sum + parseFloat(t.quoteQty), 0);\nconst spread = (data.orderBook.asks[0].price - data.orderBook.bids[0].price) / data.orderBook.bids[0].price * 100;\nconst gatePass = volume > 10000 && spread < 0.1;\nif (!gatePass) return [{ action: 'NO_TRADE', reason: 'Gate failed', symbol: data.symbol }];\n// Direction score\nconst priceChange = (data.candles[data.candles.length-1].close - data.candles[0].close) / data.candles[0].close * 100;\nconst directionScore = priceChange > 0 ? 1 : -1;\n// Timing score\nconst lastClose = data.candles[data.candles.length-1].close;\nconst avgClose = data.candles.reduce((sum, c) => sum + c.close, 0) / data.candles.length;\nconst timingScore = lastClose > avgClose ? 1 : 0;\n// Supply/demand score\nconst bidVolume = data.orderBook.bids.reduce((sum, b) => sum + parseFloat(b.quantity), 0);\nconst askVolume = data.orderBook.asks.reduce((sum, a) => sum + parseFloat(a.quantity), 0);\nconst imbalance = (bidVolume - askVolume) / (bidVolume + askVolume);\nconst flowScore = imbalance > 0.1 ? 1 : imbalance < -0.1 ? -1 : 0;\n// Total score\nconst totalScore = directionScore + timingScore + flowScore;\nconst action = totalScore >= 2 ? 'BUY' : totalScore <= -2 ? 'SELL' : 'HOLD';\nreturn [{ action, symbol: data.symbol, score: totalScore, details: { gatePass, directionScore, timingScore, flowScore } }];"
+        "mode": "combineByPosition"
       }
     },
     {
-      "id": "decisionNode",
-      "name": "Decision",
+      "id": "computeIndicators",
+      "name": "Compute Indicators",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1300,
+        300
+      ],
+      "parameters": {
+        "jsCode": "const data = $input.all();\nconst merged = {};\ndata.forEach(item => Object.assign(merged, item.json));\n// Placeholder for indicator calculations\nmerged.atr = 0.01;\nmerged.volatility = 0.02;\nmerged.volumeSpike = false;\nmerged.imbalance = 0.05;\nreturn [{ json: merged }];"
+      }
+    },
+    {
+      "id": "gateCheck",
+      "name": "Gate Check",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1500,
+        300
+      ],
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nif (!item.orderBook || !item.trades) {\n  item.gatePass = false;\n  item.reason = 'Missing orderBook or trades';\n} else {\n  item.gatePass = true;\n}\nreturn [{ json: item }];"
+      }
+    },
+    {
+      "id": "scoreCalculation",
+      "name": "Score Calculation",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1700,
+        300
+      ],
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nif (!item.gatePass) {\n  item.decision = 'NO_TRADE';\n  return [{ json: item }];\n}\nitem.directionScore = 0.6;\nitem.timingScore = 0.7;\nitem.flowScore = 0.5;\nitem.positionScore = 0.8;\nitem.totalScore = item.directionScore + item.timingScore + item.flowScore + item.positionScore;\nitem.decision = item.totalScore > 2.5 ? 'BUY' : 'NO_TRADE';\nreturn [{ json: item }];"
+      }
+    },
+    {
+      "id": "decisionIf",
+      "name": "Decision IF",
       "type": "n8n-nodes-base.if",
       "typeVersion": 1,
       "position": [
-        1300,
+        1900,
         300
       ],
       "parameters": {
         "conditions": {
           "string": [
             {
-              "value1": "={{$json.action}}",
+              "value1": "={{$json.decision}}",
               "operation": "equals",
               "value2": "BUY"
             }
@@ -137,42 +261,41 @@
       }
     },
     {
-      "id": "buyAction",
-      "name": "Buy Action",
-      "type": "n8n-nodes-base.code",
+      "id": "placeOrderBuy",
+      "name": "Place Order Buy",
+      "type": "n8n-nodes-base.binance",
       "typeVersion": 2,
       "position": [
-        1500,
+        2100,
         200
       ],
       "parameters": {
-        "jsCode": "const item = $input.first().json;\n// Simulate buy order\nreturn [{ ...item, order: 'BUY', executedAt: new Date().toISOString() }];"
+        "resource": "order",
+        "operation": "place",
+        "symbol": "={{$json.symbol}}",
+        "side": "buy",
+        "orderType": "market",
+        "baseQuantity": 0.001,
+        "additionalFields": {}
       }
     },
     {
-      "id": "sellAction",
-      "name": "Sell Action",
-      "type": "n8n-nodes-base.code",
+      "id": "placeOrderSell",
+      "name": "Place Order Sell",
+      "type": "n8n-nodes-base.binance",
       "typeVersion": 2,
       "position": [
-        1500,
+        2100,
         400
       ],
       "parameters": {
-        "jsCode": "const item = $input.first().json;\n// Simulate sell order\nreturn [{ ...item, order: 'SELL', executedAt: new Date().toISOString() }];"
-      }
-    },
-    {
-      "id": "noTrade",
-      "name": "No Trade",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        1500,
-        600
-      ],
-      "parameters": {
-        "jsCode": "const item = $input.first().json;\nreturn [{ ...item, order: 'NONE', note: 'No action taken' }];"
+        "resource": "order",
+        "operation": "place",
+        "symbol": "={{$json.symbol}}",
+        "side": "sell",
+        "orderType": "market",
+        "baseQuantity": 0.001,
+        "additionalFields": {}
       }
     }
   ],
@@ -192,12 +315,74 @@
       "main": [
         [
           {
+            "node": "splitInBatches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "splitInBatches": {
+      "main": [
+        [
+          {
             "node": "binancePrice",
             "type": "main",
             "index": 0
-          },
+          }
+        ],
+        [
           {
-            "node": "binanceCandles",
+            "node": "binanceCandles1m",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "binanceCandles5m",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "binanceCandles15m",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "binanceCandles1h",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "binanceCandles4h",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "binanceCandles1d",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "binanceOrderBook",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "binanceTrades",
             "type": "main",
             "index": 0
           }
@@ -208,20 +393,75 @@
       "main": [
         [
           {
-            "node": "aggregateData",
+            "node": "mergeData",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "binanceCandles": {
+    "binanceCandles1m": {
       "main": [
         [
           {
-            "node": "aggregateData",
+            "node": "mergeData",
             "type": "main",
             "index": 1
+          }
+        ]
+      ]
+    },
+    "binanceCandles5m": {
+      "main": [
+        [
+          {
+            "node": "mergeData",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "binanceCandles15m": {
+      "main": [
+        [
+          {
+            "node": "mergeData",
+            "type": "main",
+            "index": 3
+          }
+        ]
+      ]
+    },
+    "binanceCandles1h": {
+      "main": [
+        [
+          {
+            "node": "mergeData",
+            "type": "main",
+            "index": 4
+          }
+        ]
+      ]
+    },
+    "binanceCandles4h": {
+      "main": [
+        [
+          {
+            "node": "mergeData",
+            "type": "main",
+            "index": 5
+          }
+        ]
+      ]
+    },
+    "binanceCandles1d": {
+      "main": [
+        [
+          {
+            "node": "mergeData",
+            "type": "main",
+            "index": 6
           }
         ]
       ]
@@ -230,9 +470,9 @@
       "main": [
         [
           {
-            "node": "aggregateData",
+            "node": "mergeData",
             "type": "main",
-            "index": 2
+            "index": 7
           }
         ]
       ]
@@ -241,54 +481,69 @@
       "main": [
         [
           {
-            "node": "aggregateData",
+            "node": "mergeData",
             "type": "main",
-            "index": 3
+            "index": 8
           }
         ]
       ]
     },
-    "aggregateData": {
+    "mergeData": {
       "main": [
         [
           {
-            "node": "calculateScore",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "calculateScore": {
-      "main": [
-        [
-          {
-            "node": "decisionNode",
+            "node": "computeIndicators",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "decisionNode": {
+    "computeIndicators": {
       "main": [
         [
           {
-            "node": "buyAction",
+            "node": "gateCheck",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "gateCheck": {
+      "main": [
+        [
+          {
+            "node": "scoreCalculation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "scoreCalculation": {
+      "main": [
+        [
+          {
+            "node": "decisionIf",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "decisionIf": {
+      "main": [
+        [
+          {
+            "node": "placeOrderBuy",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "sellAction",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "noTrade",
+            "node": "placeOrderSell",
             "type": "main",
             "index": 0
           }
