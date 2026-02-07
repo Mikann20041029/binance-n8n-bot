@@ -1,17 +1,299 @@
 {
-  "name": "Workflow",
+  "name": "Binance Automation",
   "nodes": [
     {
       "id": "start",
       "name": "Start",
-      "type": "n8n-nodes-base.start",
+      "type": "n8n-nodes-base.manualTrigger",
       "typeVersion": 1,
       "position": [
-        250,
+        100,
         300
       ],
       "parameters": {}
+    },
+    {
+      "id": "fetchSymbols",
+      "name": "Symbols List",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        300,
+        300
+      ],
+      "parameters": {
+        "jsCode": "return [\n  { symbol: 'BTCUSDT' },\n  { symbol: 'ETHUSDT' },\n  { symbol: 'BNBUSDT' },\n  { symbol: 'SOLUSDT' },\n  { symbol: 'XRPUSDT' },\n  { symbol: 'ADAUSDT' },\n  { symbol: 'DOGEUSDT' },\n  { symbol: 'AVAXUSDT' },\n  { symbol: 'LINKUSDT' },\n  { symbol: 'MATICUSDT' },\n  { symbol: 'TRXUSDT' },\n  { symbol: 'DOTUSDT' }\n];"
+      }
+    },
+    {
+      "id": "binancePrice",
+      "name": "Binance Price",
+      "type": "n8n-nodes-base.binance",
+      "typeVersion": 2,
+      "position": [
+        500,
+        200
+      ],
+      "parameters": {
+        "resource": "spot",
+        "operation": "price",
+        "symbol": "={{$json.symbol}}"
+      }
+    },
+    {
+      "id": "binanceCandles",
+      "name": "Binance Candles",
+      "type": "n8n-nodes-base.binance",
+      "typeVersion": 2,
+      "position": [
+        500,
+        400
+      ],
+      "parameters": {
+        "resource": "spot",
+        "operation": "candles",
+        "symbol": "={{$json.symbol}}",
+        "interval": "1m",
+        "limit": 100
+      }
+    },
+    {
+      "id": "binanceOrderBook",
+      "name": "Binance Order Book",
+      "type": "n8n-nodes-base.binance",
+      "typeVersion": 2,
+      "position": [
+        700,
+        200
+      ],
+      "parameters": {
+        "resource": "spot",
+        "operation": "orderBook",
+        "symbol": "={{$json.symbol}}",
+        "limit": 20
+      }
+    },
+    {
+      "id": "binanceTrades",
+      "name": "Binance Trades",
+      "type": "n8n-nodes-base.binance",
+      "typeVersion": 2,
+      "position": [
+        700,
+        400
+      ],
+      "parameters": {
+        "resource": "spot",
+        "operation": "trades",
+        "symbol": "={{$json.symbol}}",
+        "limit": 100
+      }
+    },
+    {
+      "id": "aggregateData",
+      "name": "Aggregate Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        900,
+        300
+      ],
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nreturn [{\n  symbol: item.symbol,\n  price: item.price,\n  candles: item.candles,\n  orderBook: item.orderBook,\n  trades: item.trades,\n  timestamp: new Date().toISOString()\n}];"
+      }
+    },
+    {
+      "id": "calculateScore",
+      "name": "Calculate Score",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1100,
+        300
+      ],
+      "parameters": {
+        "jsCode": "const data = $input.first().json;\n// Gate conditions\nconst volume = data.trades.reduce((sum, t) => sum + parseFloat(t.quoteQty), 0);\nconst spread = (data.orderBook.asks[0].price - data.orderBook.bids[0].price) / data.orderBook.bids[0].price * 100;\nconst gatePass = volume > 10000 && spread < 0.1;\nif (!gatePass) return [{ action: 'NO_TRADE', reason: 'Gate failed', symbol: data.symbol }];\n// Direction score\nconst priceChange = (data.candles[data.candles.length-1].close - data.candles[0].close) / data.candles[0].close * 100;\nconst directionScore = priceChange > 0 ? 1 : -1;\n// Timing score\nconst lastClose = data.candles[data.candles.length-1].close;\nconst avgClose = data.candles.reduce((sum, c) => sum + c.close, 0) / data.candles.length;\nconst timingScore = lastClose > avgClose ? 1 : 0;\n// Supply/demand score\nconst bidVolume = data.orderBook.bids.reduce((sum, b) => sum + parseFloat(b.quantity), 0);\nconst askVolume = data.orderBook.asks.reduce((sum, a) => sum + parseFloat(a.quantity), 0);\nconst imbalance = (bidVolume - askVolume) / (bidVolume + askVolume);\nconst flowScore = imbalance > 0.1 ? 1 : imbalance < -0.1 ? -1 : 0;\n// Total score\nconst totalScore = directionScore + timingScore + flowScore;\nconst action = totalScore >= 2 ? 'BUY' : totalScore <= -2 ? 'SELL' : 'HOLD';\nreturn [{ action, symbol: data.symbol, score: totalScore, details: { gatePass, directionScore, timingScore, flowScore } }];"
+      }
+    },
+    {
+      "id": "decisionNode",
+      "name": "Decision",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        1300,
+        300
+      ],
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json.action}}",
+              "operation": "equals",
+              "value2": "BUY"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "buyAction",
+      "name": "Buy Action",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1500,
+        200
+      ],
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\n// Simulate buy order\nreturn [{ ...item, order: 'BUY', executedAt: new Date().toISOString() }];"
+      }
+    },
+    {
+      "id": "sellAction",
+      "name": "Sell Action",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1500,
+        400
+      ],
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\n// Simulate sell order\nreturn [{ ...item, order: 'SELL', executedAt: new Date().toISOString() }];"
+      }
+    },
+    {
+      "id": "noTrade",
+      "name": "No Trade",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1500,
+        600
+      ],
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nreturn [{ ...item, order: 'NONE', note: 'No action taken' }];"
+      }
     }
   ],
-  "connections": {}
+  "connections": {
+    "start": {
+      "main": [
+        [
+          {
+            "node": "fetchSymbols",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "fetchSymbols": {
+      "main": [
+        [
+          {
+            "node": "binancePrice",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "binanceCandles",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "binancePrice": {
+      "main": [
+        [
+          {
+            "node": "aggregateData",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "binanceCandles": {
+      "main": [
+        [
+          {
+            "node": "aggregateData",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "binanceOrderBook": {
+      "main": [
+        [
+          {
+            "node": "aggregateData",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "binanceTrades": {
+      "main": [
+        [
+          {
+            "node": "aggregateData",
+            "type": "main",
+            "index": 3
+          }
+        ]
+      ]
+    },
+    "aggregateData": {
+      "main": [
+        [
+          {
+            "node": "calculateScore",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "calculateScore": {
+      "main": [
+        [
+          {
+            "node": "decisionNode",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "decisionNode": {
+      "main": [
+        [
+          {
+            "node": "buyAction",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "sellAction",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "noTrade",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
 }
