@@ -1,549 +1,327 @@
 {
-  "name": "Binance Automation",
+  "name": "Collect v1 (Web Lists)",
   "nodes": [
     {
-      "id": "start",
-      "name": "Start",
-      "type": "n8n-nodes-base.start",
+      "id": "schedule-trigger",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1,
       "position": [
-        100,
+        250,
         300
       ],
       "parameters": {}
     },
     {
-      "id": "fetchSymbols",
-      "name": "Symbols List",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
+      "id": "set-env-vars",
+      "name": "Set Environment Variables",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
       "position": [
-        300,
+        450,
         300
       ],
       "parameters": {
-        "jsCode": "const symbols = ['BTCUSDT','ETHUSDT','BNBUSDT','SOLUSDT','XRPUSDT','ADAUSDT','DOGEUSDT','AVAXUSDT','LINKUSDT','MATICUSDT','TRXUSDT','DOTUSDT'];\nreturn symbols.map(symbol => ({ json: { symbol } }));"
-      }
-    },
-    {
-      "id": "splitInBatches",
-      "name": "Split In Batches",
-      "type": "n8n-nodes-base.splitInBatches",
-      "typeVersion": 1,
-      "position": [
-        500,
-        300
-      ],
-      "parameters": {
-        "batchSize": 1
-      }
-    },
-    {
-      "id": "binancePrice",
-      "name": "Binance Price",
-      "type": "n8n-nodes-base.binance",
-      "typeVersion": 2,
-      "position": [
-        700,
-        100
-      ],
-      "parameters": {
-        "resource": "ticker",
-        "operation": "price",
-        "symbol": "={{$json.symbol}}"
-      }
-    },
-    {
-      "id": "binanceCandles1m",
-      "name": "Binance Candles 1m",
-      "type": "n8n-nodes-base.binance",
-      "typeVersion": 2,
-      "position": [
-        700,
-        200
-      ],
-      "parameters": {
-        "resource": "candlestick",
-        "operation": "get",
-        "symbol": "={{$json.symbol}}",
-        "interval": "1m",
-        "limit": 100
-      }
-    },
-    {
-      "id": "binanceCandles5m",
-      "name": "Binance Candles 5m",
-      "type": "n8n-nodes-base.binance",
-      "typeVersion": 2,
-      "position": [
-        700,
-        300
-      ],
-      "parameters": {
-        "resource": "candlestick",
-        "operation": "get",
-        "symbol": "={{$json.symbol}}",
-        "interval": "5m",
-        "limit": 100
-      }
-    },
-    {
-      "id": "binanceCandles15m",
-      "name": "Binance Candles 15m",
-      "type": "n8n-nodes-base.binance",
-      "typeVersion": 2,
-      "position": [
-        700,
-        400
-      ],
-      "parameters": {
-        "resource": "candlestick",
-        "operation": "get",
-        "symbol": "={{$json.symbol}}",
-        "interval": "15m",
-        "limit": 100
-      }
-    },
-    {
-      "id": "binanceCandles1h",
-      "name": "Binance Candles 1h",
-      "type": "n8n-nodes-base.binance",
-      "typeVersion": 2,
-      "position": [
-        700,
-        500
-      ],
-      "parameters": {
-        "resource": "candlestick",
-        "operation": "get",
-        "symbol": "={{$json.symbol}}",
-        "interval": "1h",
-        "limit": 100
-      }
-    },
-    {
-      "id": "binanceCandles4h",
-      "name": "Binance Candles 4h",
-      "type": "n8n-nodes-base.binance",
-      "typeVersion": 2,
-      "position": [
-        700,
-        600
-      ],
-      "parameters": {
-        "resource": "candlestick",
-        "operation": "get",
-        "symbol": "={{$json.symbol}}",
-        "interval": "4h",
-        "limit": 100
-      }
-    },
-    {
-      "id": "binanceCandles1d",
-      "name": "Binance Candles 1d",
-      "type": "n8n-nodes-base.binance",
-      "typeVersion": 2,
-      "position": [
-        700,
-        700
-      ],
-      "parameters": {
-        "resource": "candlestick",
-        "operation": "get",
-        "symbol": "={{$json.symbol}}",
-        "interval": "1d",
-        "limit": 100
-      }
-    },
-    {
-      "id": "binanceOrderBook",
-      "name": "Binance Order Book",
-      "type": "n8n-nodes-base.binance",
-      "typeVersion": 2,
-      "position": [
-        900,
-        300
-      ],
-      "parameters": {
-        "resource": "orderBook",
-        "operation": "get",
-        "symbol": "={{$json.symbol}}",
-        "depth": 20
-      }
-    },
-    {
-      "id": "binanceTrades",
-      "name": "Binance Trades",
-      "type": "n8n-nodes-base.binance",
-      "typeVersion": 2,
-      "position": [
-        900,
-        500
-      ],
-      "parameters": {
-        "resource": "trade",
-        "operation": "get",
-        "symbol": "={{$json.symbol}}",
-        "limit": 100
-      }
-    },
-    {
-      "id": "mergeData",
-      "name": "Merge Data",
-      "type": "n8n-nodes-base.merge",
-      "typeVersion": 2,
-      "position": [
-        1100,
-        300
-      ],
-      "parameters": {
-        "mode": "combineByPosition"
-      }
-    },
-    {
-      "id": "computeIndicators",
-      "name": "Compute Indicators",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        1300,
-        300
-      ],
-      "parameters": {
-        "jsCode": "const data = $input.all();\nconst merged = {};\ndata.forEach(item => Object.assign(merged, item.json));\n// Placeholder for indicator calculations\nmerged.atr = 0.01;\nmerged.volatility = 0.02;\nmerged.volumeSpike = false;\nmerged.imbalance = 0.05;\nreturn [{ json: merged }];"
-      }
-    },
-    {
-      "id": "gateCheck",
-      "name": "Gate Check",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        1500,
-        300
-      ],
-      "parameters": {
-        "jsCode": "const item = $input.first().json;\nif (!item.orderBook || !item.trades) {\n  item.gatePass = false;\n  item.reason = 'Missing orderBook or trades';\n} else {\n  item.gatePass = true;\n}\nreturn [{ json: item }];"
-      }
-    },
-    {
-      "id": "scoreCalculation",
-      "name": "Score Calculation",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        1700,
-        300
-      ],
-      "parameters": {
-        "jsCode": "const item = $input.first().json;\nif (!item.gatePass) {\n  item.decision = 'NO_TRADE';\n  return [{ json: item }];\n}\nitem.directionScore = 0.6;\nitem.timingScore = 0.7;\nitem.flowScore = 0.5;\nitem.positionScore = 0.8;\nitem.totalScore = item.directionScore + item.timingScore + item.flowScore + item.positionScore;\nitem.decision = item.totalScore > 2.5 ? 'BUY' : 'NO_TRADE';\nreturn [{ json: item }];"
-      }
-    },
-    {
-      "id": "decisionIf",
-      "name": "Decision IF",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 1,
-      "position": [
-        1900,
-        300
-      ],
-      "parameters": {
-        "conditions": {
-          "string": [
+        "assignments": {
+          "assignments": [
             {
-              "value1": "={{$json.decision}}",
-              "operation": "equals",
-              "value2": "BUY"
+              "id": "list-pages-json",
+              "name": "LIST_PAGES_JSON",
+              "value": "={{ $env.LIST_PAGES_JSON }}",
+              "type": "string"
+            },
+            {
+              "id": "max-items-per-source",
+              "name": "MAX_ITEMS_PER_SOURCE",
+              "value": "={{ $env.MAX_ITEMS_PER_SOURCE }}",
+              "type": "string"
+            },
+            {
+              "id": "include-keywords-csv",
+              "name": "INCLUDE_KEYWORDS_CSV",
+              "value": "={{ $env.INCLUDE_KEYWORDS_CSV }}",
+              "type": "string"
+            },
+            {
+              "id": "exclude-keywords-csv",
+              "name": "EXCLUDE_KEYWORDS_CSV",
+              "value": "={{ $env.EXCLUDE_KEYWORDS_CSV }}",
+              "type": "string"
+            },
+            {
+              "id": "user-agent",
+              "name": "USER_AGENT",
+              "value": "={{ $env.USER_AGENT }}",
+              "type": "string"
+            },
+            {
+              "id": "timeout-ms",
+              "name": "TIMEOUT_MS",
+              "value": "={{ $env.TIMEOUT_MS }}",
+              "type": "string"
             }
           ]
         }
       }
     },
     {
-      "id": "placeOrderBuy",
-      "name": "Place Order Buy",
-      "type": "n8n-nodes-base.binance",
+      "id": "parse-list-pages",
+      "name": "Parse LIST_PAGES_JSON",
+      "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        2100,
-        200
+        650,
+        300
       ],
       "parameters": {
-        "resource": "order",
-        "operation": "place",
-        "symbol": "={{$json.symbol}}",
-        "side": "buy",
-        "orderType": "market",
-        "baseQuantity": 0.001,
-        "additionalFields": {}
+        "jsCode": "const listPagesJson = $input.first().json.LIST_PAGES_JSON;\nlet listPages = [];\ntry {\n  listPages = JSON.parse(listPagesJson);\n} catch (error) {\n  throw new Error('Failed to parse LIST_PAGES_JSON: ' + error.message);\n}\nreturn listPages.map(page => ({\n  json: page\n}));"
       }
     },
     {
-      "id": "placeOrderSell",
-      "name": "Place Order Sell",
-      "type": "n8n-nodes-base.binance",
-      "typeVersion": 2,
+      "id": "http-get-list-pages",
+      "name": "HTTP GET List Pages",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
       "position": [
-        2100,
-        400
+        850,
+        300
       ],
       "parameters": {
-        "resource": "order",
-        "operation": "place",
-        "symbol": "={{$json.symbol}}",
-        "side": "sell",
-        "orderType": "market",
-        "baseQuantity": 0.001,
-        "additionalFields": {}
+        "authentication": "none",
+        "options": {
+          "timeout": "={{ $env.TIMEOUT_MS }}"
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "={{ $env.USER_AGENT }}"
+            }
+          ]
+        },
+        "sendBody": false,
+        "method": "GET",
+        "url": "={{ $json.list_url }}"
+      }
+    },
+    {
+      "id": "extract-links",
+      "name": "Extract Links with Regex",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1050,
+        300
+      ],
+      "parameters": {
+        "jsCode": "const html = $input.first().json.body;\nconst linkRegex = $input.first().json.link_regex;\nconst sourceName = $input.first().json.source_name;\nconst listUrl = $input.first().json.list_url;\nconst maxItems = parseInt($env.MAX_ITEMS_PER_SOURCE) || 30;\n\nconst regex = new RegExp(linkRegex, 'g');\nlet matches = [];\nlet match;\nwhile ((match = regex.exec(html)) !== null) {\n  matches.push(match[0]);\n}\n\n// Normalize and deduplicate\nconst normalized = matches.map(url => url.trim());\nconst unique = [...new Set(normalized)];\nconst limited = unique.slice(0, maxItems);\n\nreturn limited.map(url => ({\n  json: {\n    source_name: sourceName,\n    list_url: listUrl,\n    list_html: html,\n    detail_url: url,\n    extracted_count: limited.length\n  }\n}));"
+      }
+    },
+    {
+      "id": "http-get-detail-pages",
+      "name": "HTTP GET Detail Pages",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        1250,
+        300
+      ],
+      "parameters": {
+        "authentication": "none",
+        "options": {
+          "timeout": "={{ $env.TIMEOUT_MS }}",
+          "maxTries": 3
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "={{ $env.USER_AGENT }}"
+            }
+          ]
+        },
+        "sendBody": false,
+        "method": "GET",
+        "url": "={{ $json.detail_url }}"
+      }
+    },
+    {
+      "id": "extract-detail-data",
+      "name": "Extract Detail Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1450,
+        300
+      ],
+      "parameters": {
+        "jsCode": "const detailHtml = $input.first().json.body;\nconst sourceName = $input.first().json.source_name;\nconst listUrl = $input.first().json.list_url;\nconst listHtml = $input.first().json.list_html;\nconst detailUrl = $input.first().json.detail_url;\n\n// Extract title from HTML\nlet title = null;\nconst titleMatch = detailHtml.match(/<title>([^<]*)<\\/title>/i);\nif (titleMatch && titleMatch[1]) {\n  title = titleMatch[1].trim();\n}\n\n// Extract body text (strip tags, normalize whitespace)\nlet body = detailHtml.replace(/<[^>]*>/g, ' ');\nbody = body.replace(/\\s+/g, ' ').trim();\n\nreturn [{\n  json: {\n    source_type: 'web_list',\n    source_name: sourceName,\n    title: title,\n    url: detailUrl,\n    published_at: null,\n    body: body,\n    raw: {\n      list_url: listUrl,\n      list_html: listHtml,\n      detail_html: detailHtml\n    }\n  }\n}];"
+      }
+    },
+    {
+      "id": "filter-include-keywords",
+      "name": "Filter Include Keywords",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2,
+      "position": [
+        1650,
+        300
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false
+          },
+          "conditions": [
+            {
+              "id": "include-filter",
+              "leftValue": "={{ $json.body + ' ' + ($json.title || '') }}",
+              "rightValue": "={{ $env.INCLUDE_KEYWORDS_CSV }}",
+              "condition": "contains"
+            }
+          ],
+          "combinator": "any"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "filter-exclude-keywords",
+      "name": "Filter Exclude Keywords",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2,
+      "position": [
+        1850,
+        300
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false
+          },
+          "conditions": [
+            {
+              "id": "exclude-filter",
+              "leftValue": "={{ $json.body + ' ' + ($json.title || '') }}",
+              "rightValue": "={{ $env.EXCLUDE_KEYWORDS_CSV }}",
+              "condition": "notContains"
+            }
+          ],
+          "combinator": "all"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "merge-output",
+      "name": "Merge Output",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2,
+      "position": [
+        2050,
+        300
+      ],
+      "parameters": {
+        "options": {}
       }
     }
   ],
   "connections": {
-    "start": {
+    "Schedule Trigger": {
       "main": [
         [
           {
-            "node": "fetchSymbols",
+            "node": "Set Environment Variables",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "fetchSymbols": {
+    "Set Environment Variables": {
       "main": [
         [
           {
-            "node": "splitInBatches",
+            "node": "Parse LIST_PAGES_JSON",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "splitInBatches": {
+    "Parse LIST_PAGES_JSON": {
       "main": [
         [
           {
-            "node": "binancePrice",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "binanceCandles1m",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "binanceCandles5m",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "binanceCandles15m",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "binanceCandles1h",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "binanceCandles4h",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "binanceCandles1d",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "binanceOrderBook",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "binanceTrades",
+            "node": "HTTP GET List Pages",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "binancePrice": {
+    "HTTP GET List Pages": {
       "main": [
         [
           {
-            "node": "mergeData",
+            "node": "Extract Links with Regex",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "binanceCandles1m": {
+    "Extract Links with Regex": {
       "main": [
         [
           {
-            "node": "mergeData",
-            "type": "main",
-            "index": 1
-          }
-        ]
-      ]
-    },
-    "binanceCandles5m": {
-      "main": [
-        [
-          {
-            "node": "mergeData",
-            "type": "main",
-            "index": 2
-          }
-        ]
-      ]
-    },
-    "binanceCandles15m": {
-      "main": [
-        [
-          {
-            "node": "mergeData",
-            "type": "main",
-            "index": 3
-          }
-        ]
-      ]
-    },
-    "binanceCandles1h": {
-      "main": [
-        [
-          {
-            "node": "mergeData",
-            "type": "main",
-            "index": 4
-          }
-        ]
-      ]
-    },
-    "binanceCandles4h": {
-      "main": [
-        [
-          {
-            "node": "mergeData",
-            "type": "main",
-            "index": 5
-          }
-        ]
-      ]
-    },
-    "binanceCandles1d": {
-      "main": [
-        [
-          {
-            "node": "mergeData",
-            "type": "main",
-            "index": 6
-          }
-        ]
-      ]
-    },
-    "binanceOrderBook": {
-      "main": [
-        [
-          {
-            "node": "mergeData",
-            "type": "main",
-            "index": 7
-          }
-        ]
-      ]
-    },
-    "binanceTrades": {
-      "main": [
-        [
-          {
-            "node": "mergeData",
-            "type": "main",
-            "index": 8
-          }
-        ]
-      ]
-    },
-    "mergeData": {
-      "main": [
-        [
-          {
-            "node": "computeIndicators",
+            "node": "HTTP GET Detail Pages",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "computeIndicators": {
+    "HTTP GET Detail Pages": {
       "main": [
         [
           {
-            "node": "gateCheck",
+            "node": "Extract Detail Data",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "gateCheck": {
+    "Extract Detail Data": {
       "main": [
         [
           {
-            "node": "scoreCalculation",
+            "node": "Filter Include Keywords",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "scoreCalculation": {
+    "Filter Include Keywords": {
       "main": [
         [
           {
-            "node": "decisionIf",
+            "node": "Filter Exclude Keywords",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "decisionIf": {
+    "Filter Exclude Keywords": {
       "main": [
         [
           {
-            "node": "placeOrderBuy",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "placeOrderSell",
+            "node": "Merge Output",
             "type": "main",
             "index": 0
           }
