@@ -1,1 +1,14 @@
+{
+  "name": "n8n-workflow-builder",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "gen": "node scripts/generate_workflow.mjs",
+    "val": "node scripts/validate_workflow.mjs"
+  },
+  "dependencies": {
+    "ajv": "^8.17.1",
+    "openai": "^4.0.0"
+  }
+}
 
