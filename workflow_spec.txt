@@ -439,3 +439,50 @@ E. 1回の売り判断で“二度撃ち”しない（注文状態の管理）
 
 」
 
+必須
+Split in Batches（12銘柄を1つずつ回す）
+
+各銘柄ごとに並列取得（最低でも）
+
+price（last/mark/indexのどれを使うか明記）
+
+candles：1m/5m/15m/1h/4h/1d（intervalごとに別ノード or HTTPでまとめて）
+
+orderbook（depth）
+
+trades or aggTrades
+
+Merge(結合)：上の取得結果を「1アイテムに集約」する（Merge by position / Merge multiple）
+
+Compute Indicators(Code)：ATR/σ/出来高MA/スパイク/imbalance等をここで算出
+
+Gate(Code)：ゲート条件を満たさない場合は即NO_TRADE
+
+Score(Code)：方向/タイミング/需給/整合を別スコアで出す（合算）
+
+Decision(IF)：BUY/SELL/NO
+
+BUYは「実注文ノード」か「HTTP Requestでsigned注文」（Simulate禁止）
+
+SELLも同様（あなたの例外付きルールはここに実装）
+
+さらに spec にこう書く：
+
+“orderbook/tradesが無い場合は必ずNO_TRADEで落とす”
+
+“Mergeせずに$input.first()で済ませるの禁止”
+
+“Simulateは禁止。placeOrder必須”
+
+これで“スケルトン300行”じゃなく、ちゃんと太る。
+
+4) いまのJSONを最低限動くようにするなら（応急処置）
+
+生成器を直す前に動作検証したいなら、最低限これをやる：
+
+fetchSymbols から binanceOrderBook と binanceTrades にも接続する
+
+aggregateData を「4入力を正しくマージ」するコードに変える
+例：各入力のjsonを Object.assign で統合（入力が複数枝なので Merge ノードを使う方が安全）
+
+calculateScore の quoteQty 参照は、Binanceのtradesレスポンス形に合わせる
