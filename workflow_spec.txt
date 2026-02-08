@@ -1,54 +1,10 @@
-
-n8nにインポート可能なJSONを生成してください。
-ワークフロー名は「Collect v1 (Web Lists)」。起点は既にある Schedule Trigger を使います。
-
-目的:
-	•	ネット上の案件候補を収集する（判定はしない）。
-	•	収集対象は「公開されている案件の一覧/検索結果ページ」だけに限定する。
-	•	一覧ページから新規リンクを抽出し、その詳細ページ本文も取得して、候補アイテムとして出力する。
-
-入力（すべて環境変数で差し替え可能にする）:
-	•	LIST_PAGES_JSON: JSON配列。各要素は { “source_name”: “…”, “list_url”: “…”, “link_regex”: “…” } とする。
-例:
-[
-{“source_name”:“siteA”,“list_url”:“https://example.com/jobs?q=python”,“link_regex”:“https://example.com/jobs/[^"\s]+”},
-{“source_name”:“siteB”,“list_url”:“https://example.org/projects?keyword=data”,“link_regex”:“https://example.org/project/[^"\s]+”}
-]
-	•	MAX_ITEMS_PER_SOURCE: 1回の実行で各sourceから抽出する最大件数（例: 30）
-	•	INCLUDE_KEYWORDS_CSV: 一次フィルタ用の含有キーワード（例: “抽出,収集,リスト,転記,CSV,スプレッドシート,自動化,API,Python,GAS,n8n,要約,リライト”）
-	•	EXCLUDE_KEYWORDS_CSV: 除外キーワード（例: “アダルト,投資勧誘,マルチ,口座開設,代行購入”）
-	•	USER_AGENT: HTTPリクエストのUser-Agent
-	•	TIMEOUT_MS: HTTPタイムアウト
-
-処理手順:
-	1.	LIST_PAGES_JSON を読み込み、各 list_url をHTTP GETで取得する（並列実行）
-	2.	取得したHTMLから link_regex を使って候補リンクURLを抽出する
-	3.	URLを正規化し、重複を除外する
-	4.	抽出リンク数を MAX_ITEMS_PER_SOURCE に制限する
-	5.	各リンク（詳細ページ）をHTTP GETで取得する（並列実行、リトライあり）
-	6.	詳細ページHTMLからテキストを抽出して本文(body)とする（タグ除去、空白整形）
-	7.	一次フィルタを適用する：
-	•	body または title（titleはHTMLのから取れるなら取る）に INCLUDE_KEYWORDS_CSV のいずれかが含まれない場合は除外
-	•	body または title に EXCLUDE_KEYWORDS_CSV が含まれる場合は除外
-	8.	出力は「候補アイテムの配列」で、全source分を結合して次工程へ渡せる形にする
-
-出力スキーマ（各itemのjsonは必ずこの形にする）:
-{
-“source_type”: “web_list”,
-“source_name”: “string”,
-“title”: “string|null”,
-“url”: “string”,
-“published_at”: null,
-“body”: “string”,
-“raw”: {
-“list_url”: “string”,
-“list_html”: “string”,
-“detail_html”: “string”
-}
-}
-
-要件:
-	•	このワークフローは「収集だけ」。AI判定ノードは入れない。
-	•	エラーが起きても他ソースは続行し、失敗はログに残す。
-	•	取得先URLやキーワードはすべて環境変数で差し替えできるようにする。
-	•	n8nにインポート可能なJSON全文を出力する。
+ワークフローA：Steam“Worth It Only”
+	1.	Cron：15分
+	2.	HTTP：価格API取得
+	3.	Function：フィルタ（割引/価格/評価/レビュー数）
+	4.	HTTP：履歴APIで過去最安判定
+	5.	Data Store：game_id + price + discount で重複排除
+	6.	Set：投稿整形（3行）
+	•	タイトル
+	•	$X → $Y (−Z%) / いつまで
+	•	Why Worth It（評価・最安根拠）
