@@ -1,327 +1,195 @@
 {
-  "name": "Collect v1 (Web Lists)",
+  "name": "Steam Worth It Only",
   "nodes": [
     {
-      "id": "schedule-trigger",
-      "name": "Schedule Trigger",
-      "type": "n8n-nodes-base.scheduleTrigger",
+      "id": "cron",
+      "name": "Cron Trigger",
+      "type": "n8n-nodes-base.cron",
       "typeVersion": 1,
       "position": [
-        250,
-        300
-      ],
-      "parameters": {}
-    },
-    {
-      "id": "set-env-vars",
-      "name": "Set Environment Variables",
-      "type": "n8n-nodes-base.set",
-      "typeVersion": 3,
-      "position": [
-        450,
-        300
+        100,
+        200
       ],
       "parameters": {
-        "assignments": {
-          "assignments": [
-            {
-              "id": "list-pages-json",
-              "name": "LIST_PAGES_JSON",
-              "value": "={{ $env.LIST_PAGES_JSON }}",
-              "type": "string"
-            },
-            {
-              "id": "max-items-per-source",
-              "name": "MAX_ITEMS_PER_SOURCE",
-              "value": "={{ $env.MAX_ITEMS_PER_SOURCE }}",
-              "type": "string"
-            },
-            {
-              "id": "include-keywords-csv",
-              "name": "INCLUDE_KEYWORDS_CSV",
-              "value": "={{ $env.INCLUDE_KEYWORDS_CSV }}",
-              "type": "string"
-            },
-            {
-              "id": "exclude-keywords-csv",
-              "name": "EXCLUDE_KEYWORDS_CSV",
-              "value": "={{ $env.EXCLUDE_KEYWORDS_CSV }}",
-              "type": "string"
-            },
-            {
-              "id": "user-agent",
-              "name": "USER_AGENT",
-              "value": "={{ $env.USER_AGENT }}",
-              "type": "string"
-            },
-            {
-              "id": "timeout-ms",
-              "name": "TIMEOUT_MS",
-              "value": "={{ $env.TIMEOUT_MS }}",
-              "type": "string"
-            }
+        "rule": {
+          "timezone": "UTC",
+          "interval": [
+            15,
+            "minutes"
           ]
         }
       }
     },
     {
-      "id": "parse-list-pages",
-      "name": "Parse LIST_PAGES_JSON",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        650,
-        300
-      ],
-      "parameters": {
-        "jsCode": "const listPagesJson = $input.first().json.LIST_PAGES_JSON;\nlet listPages = [];\ntry {\n  listPages = JSON.parse(listPagesJson);\n} catch (error) {\n  throw new Error('Failed to parse LIST_PAGES_JSON: ' + error.message);\n}\nreturn listPages.map(page => ({\n  json: page\n}));"
-      }
-    },
-    {
-      "id": "http-get-list-pages",
-      "name": "HTTP GET List Pages",
+      "id": "http-price",
+      "name": "Get Price API",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
       "position": [
-        850,
-        300
+        300,
+        200
       ],
       "parameters": {
-        "authentication": "none",
-        "options": {
-          "timeout": "={{ $env.TIMEOUT_MS }}"
-        },
+        "method": "GET",
+        "url": "={{$parameter.url}}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
             {
-              "name": "User-Agent",
-              "value": "={{ $env.USER_AGENT }}"
+              "name": "Content-Type",
+              "value": "application/json"
             }
           ]
         },
-        "sendBody": false,
-        "method": "GET",
-        "url": "={{ $json.list_url }}"
-      }
-    },
-    {
-      "id": "extract-links",
-      "name": "Extract Links with Regex",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        1050,
-        300
-      ],
-      "parameters": {
-        "jsCode": "const html = $input.first().json.body;\nconst linkRegex = $input.first().json.link_regex;\nconst sourceName = $input.first().json.source_name;\nconst listUrl = $input.first().json.list_url;\nconst maxItems = parseInt($env.MAX_ITEMS_PER_SOURCE) || 30;\n\nconst regex = new RegExp(linkRegex, 'g');\nlet matches = [];\nlet match;\nwhile ((match = regex.exec(html)) !== null) {\n  matches.push(match[0]);\n}\n\n// Normalize and deduplicate\nconst normalized = matches.map(url => url.trim());\nconst unique = [...new Set(normalized)];\nconst limited = unique.slice(0, maxItems);\n\nreturn limited.map(url => ({\n  json: {\n    source_name: sourceName,\n    list_url: listUrl,\n    list_html: html,\n    detail_url: url,\n    extracted_count: limited.length\n  }\n}));"
-      }
-    },
-    {
-      "id": "http-get-detail-pages",
-      "name": "HTTP GET Detail Pages",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4,
-      "position": [
-        1250,
-        300
-      ],
-      "parameters": {
-        "authentication": "none",
-        "options": {
-          "timeout": "={{ $env.TIMEOUT_MS }}",
-          "maxTries": 3
-        },
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "User-Agent",
-              "value": "={{ $env.USER_AGENT }}"
-            }
-          ]
-        },
-        "sendBody": false,
-        "method": "GET",
-        "url": "={{ $json.detail_url }}"
-      }
-    },
-    {
-      "id": "extract-detail-data",
-      "name": "Extract Detail Data",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        1450,
-        300
-      ],
-      "parameters": {
-        "jsCode": "const detailHtml = $input.first().json.body;\nconst sourceName = $input.first().json.source_name;\nconst listUrl = $input.first().json.list_url;\nconst listHtml = $input.first().json.list_html;\nconst detailUrl = $input.first().json.detail_url;\n\n// Extract title from HTML\nlet title = null;\nconst titleMatch = detailHtml.match(/<title>([^<]*)<\\/title>/i);\nif (titleMatch && titleMatch[1]) {\n  title = titleMatch[1].trim();\n}\n\n// Extract body text (strip tags, normalize whitespace)\nlet body = detailHtml.replace(/<[^>]*>/g, ' ');\nbody = body.replace(/\\s+/g, ' ').trim();\n\nreturn [{\n  json: {\n    source_type: 'web_list',\n    source_name: sourceName,\n    title: title,\n    url: detailUrl,\n    published_at: null,\n    body: body,\n    raw: {\n      list_url: listUrl,\n      list_html: listHtml,\n      detail_html: detailHtml\n    }\n  }\n}];"
-      }
-    },
-    {
-      "id": "filter-include-keywords",
-      "name": "Filter Include Keywords",
-      "type": "n8n-nodes-base.filter",
-      "typeVersion": 2,
-      "position": [
-        1650,
-        300
-      ],
-      "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": false
-          },
-          "conditions": [
-            {
-              "id": "include-filter",
-              "leftValue": "={{ $json.body + ' ' + ($json.title || '') }}",
-              "rightValue": "={{ $env.INCLUDE_KEYWORDS_CSV }}",
-              "condition": "contains"
-            }
-          ],
-          "combinator": "any"
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": []
         },
         "options": {}
       }
     },
     {
-      "id": "filter-exclude-keywords",
-      "name": "Filter Exclude Keywords",
-      "type": "n8n-nodes-base.filter",
-      "typeVersion": 2,
+      "id": "function-filter",
+      "name": "Filter Games",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
       "position": [
-        1850,
-        300
+        500,
+        200
       ],
       "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": false
-          },
-          "conditions": [
+        "jsCode": "const items = $input.all();\nconst filtered = [];\nfor (const item of items) {\n  const json = item.json;\n  const discount = json.discount_percent || 0;\n  const price = json.final_price || 0;\n  const rating = json.rating || 0;\n  const reviews = json.reviews_total || 0;\n  if (discount >= 50 && price <= 20 && rating >= 70 && reviews >= 1000) {\n    filtered.push(item);\n  }\n}\nreturn filtered;"
+      }
+    },
+    {
+      "id": "http-history",
+      "name": "Check Historical Low",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        700,
+        200
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "={{$parameter.url}}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
             {
-              "id": "exclude-filter",
-              "leftValue": "={{ $json.body + ' ' + ($json.title || '') }}",
-              "rightValue": "={{ $env.EXCLUDE_KEYWORDS_CSV }}",
-              "condition": "notContains"
+              "name": "Content-Type",
+              "value": "application/json"
             }
-          ],
-          "combinator": "all"
+          ]
+        },
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": []
         },
         "options": {}
       }
     },
     {
-      "id": "merge-output",
-      "name": "Merge Output",
-      "type": "n8n-nodes-base.merge",
-      "typeVersion": 2,
+      "id": "data-store",
+      "name": "Deduplicate by Game ID",
+      "type": "n8n-nodes-base.dataStore",
+      "typeVersion": 1,
       "position": [
-        2050,
-        300
+        900,
+        200
       ],
       "parameters": {
+        "operation": "checkDuplicates",
+        "key": "={{$json.game_id}}",
+        "value": "={{JSON.stringify({price: $json.price, discount: $json.discount})}}"
+      }
+    },
+    {
+      "id": "set",
+      "name": "Format Post",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [
+        1100,
+        200
+      ],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "title",
+              "name": "title",
+              "value": "={{$json.title}}",
+              "type": "string"
+            },
+            {
+              "id": "price_info",
+              "name": "price_info",
+              "value": "=${{$json.original_price}} → ${{$json.final_price}} (−{{$json.discount_percent}}%) / Until {{$json.discount_end_time}}",
+              "type": "string"
+            },
+            {
+              "id": "why_worth_it",
+              "name": "why_worth_it",
+              "value": "=Rating: {{$json.rating}}%, Historical Low: ${{$json.historical_low_price}} ({{$json.historical_low_discount}}% off)",
+              "type": "string"
+            }
+          ]
+        },
         "options": {}
       }
     }
   ],
   "connections": {
-    "Schedule Trigger": {
+    "Cron Trigger": {
       "main": [
         [
           {
-            "node": "Set Environment Variables",
+            "node": "Get Price API",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Set Environment Variables": {
+    "Get Price API": {
       "main": [
         [
           {
-            "node": "Parse LIST_PAGES_JSON",
+            "node": "Filter Games",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Parse LIST_PAGES_JSON": {
+    "Filter Games": {
       "main": [
         [
           {
-            "node": "HTTP GET List Pages",
+            "node": "Check Historical Low",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "HTTP GET List Pages": {
+    "Check Historical Low": {
       "main": [
         [
           {
-            "node": "Extract Links with Regex",
+            "node": "Deduplicate by Game ID",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Extract Links with Regex": {
+    "Deduplicate by Game ID": {
       "main": [
         [
           {
-            "node": "HTTP GET Detail Pages",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "HTTP GET Detail Pages": {
-      "main": [
-        [
-          {
-            "node": "Extract Detail Data",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Extract Detail Data": {
-      "main": [
-        [
-          {
-            "node": "Filter Include Keywords",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Filter Include Keywords": {
-      "main": [
-        [
-          {
-            "node": "Filter Exclude Keywords",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Filter Exclude Keywords": {
-      "main": [
-        [
-          {
-            "node": "Merge Output",
+            "node": "Format Post",
             "type": "main",
             "index": 0
           }
