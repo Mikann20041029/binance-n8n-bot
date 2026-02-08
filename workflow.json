@@ -1,142 +1,207 @@
 {
-  "name": "Steam Worth It Only",
+  "name": "Steam Sale Discord Notifier",
   "nodes": [
     {
-      "id": "cron",
+      "id": "cron-trigger",
       "name": "Cron Trigger",
       "type": "n8n-nodes-base.cron",
       "typeVersion": 1,
       "position": [
-        100,
-        200
+        240,
+        300
       ],
       "parameters": {
         "rule": {
-          "timezone": "UTC",
-          "interval": [
-            15,
-            "minutes"
-          ]
+          "timezone": "{{$env.TZ}}",
+          "cronExpression": "*/15 * * * *"
         }
       }
     },
     {
-      "id": "http-price",
-      "name": "Get Price API",
+      "id": "fetch-deals",
+      "name": "Fetch Deals",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
       "position": [
-        300,
-        200
+        420,
+        300
       ],
       "parameters": {
-        "method": "GET",
-        "url": "={{$parameter.url}}",
+        "url": "https://www.cheapshark.com/api/1.0/deals",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
             {
-              "name": "Content-Type",
+              "name": "Accept",
               "value": "application/json"
             }
           ]
         },
         "sendQuery": true,
         "queryParameters": {
-          "parameters": []
+          "parameters": [
+            {
+              "name": "storeID",
+              "value": "1"
+            },
+            {
+              "name": "pageSize",
+              "value": "60"
+            },
+            {
+              "name": "sortBy",
+              "value": "Deal Rating"
+            },
+            {
+              "name": "onSale",
+              "value": "1"
+            },
+            {
+              "name": "upperPrice",
+              "value": "5"
+            },
+            {
+              "name": "steamRating",
+              "value": "1"
+            }
+          ]
         },
-        "options": {}
+        "options": {
+          "timeout": 10000
+        }
       }
     },
     {
-      "id": "function-filter",
-      "name": "Filter Games",
-      "type": "n8n-nodes-base.function",
+      "id": "filter-and-format",
+      "name": "Filter and Format",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        600,
+        300
+      ],
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst filtered = [];\n\nfor (const item of items) {\n  const deal = item.json;\n  if (!deal) continue;\n  \n  const savings = parseFloat(deal.savings);\n  const salePrice = parseFloat(deal.salePrice);\n  const normalPrice = parseFloat(deal.normalPrice);\n  const steamRatingCount = parseInt(deal.steamRatingCount, 10);\n  const cheapestPrice = deal.cheapestPrice ? parseFloat(deal.cheapestPrice) : null;\n  \n  // Condition 1: savings >= 90\n  if (savings < 90) continue;\n  \n  // Condition 2: salePrice <= 5 (already filtered by API but double-check)\n  if (salePrice > 5) continue;\n  \n  // Condition 3: steamRatingText is \"Very Positive\" or \"Overwhelmingly Positive\"\n  const ratingText = deal.steamRatingText;\n  if (!ratingText || !(ratingText.includes('Very Positive') || ratingText.includes('Overwhelmingly Positive'))) continue;\n  \n  // Condition 4: steamRatingCount >= 1000\n  if (isNaN(steamRatingCount) || steamRatingCount < 1000) continue;\n  \n  // Condition 5: salePrice == cheapestPrice (if cheapestPrice exists)\n  if (cheapestPrice !== null && Math.abs(salePrice - cheapestPrice) > 0.001) continue;\n  \n  // Build message content\n  let content = `**${deal.title}**\\n`;\n  content += `Price: **$${salePrice.toFixed(2)}** (was $${normalPrice.toFixed(2)}) - **${savings.toFixed(0)}% off**\\n`;\n  content += `Steam Rating: ${ratingText} (${steamRatingCount} reviews)\\n`;\n  content += `Deal Link: https://www.cheapshark.com/redirect?dealID=${deal.dealID}\\n`;\n  if (deal.steamAppID) {\n    content += `Steam Store: https://store.steampowered.com/app/${deal.steamAppID}/`;\n  }\n  \n  filtered.push({\n    json: {\n      ...deal,\n      savings,\n      salePrice,\n      normalPrice,\n      steamRatingCount,\n      cheapestPrice,\n      notificationContent: content\n    }\n  });\n}\n\nreturn filtered;"
+      }
+    },
+    {
+      "id": "split-batches",
+      "name": "Split In Batches",
+      "type": "n8n-nodes-base.splitInBatches",
       "typeVersion": 1,
       "position": [
-        500,
-        200
+        780,
+        300
       ],
       "parameters": {
-        "jsCode": "const items = $input.all();\nconst filtered = [];\nfor (const item of items) {\n  const json = item.json;\n  const discount = json.discount_percent || 0;\n  const price = json.final_price || 0;\n  const rating = json.rating || 0;\n  const reviews = json.reviews_total || 0;\n  if (discount >= 50 && price <= 20 && rating >= 70 && reviews >= 1000) {\n    filtered.push(item);\n  }\n}\nreturn filtered;"
+        "batchSize": 1
       }
     },
     {
-      "id": "http-history",
-      "name": "Check Historical Low",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4,
-      "position": [
-        700,
-        200
-      ],
-      "parameters": {
-        "method": "GET",
-        "url": "={{$parameter.url}}",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Content-Type",
-              "value": "application/json"
-            }
-          ]
-        },
-        "sendQuery": true,
-        "queryParameters": {
-          "parameters": []
-        },
-        "options": {}
-      }
-    },
-    {
-      "id": "data-store",
-      "name": "Deduplicate by Game ID",
+      "id": "data-store-get",
+      "name": "Data Store Get",
       "type": "n8n-nodes-base.dataStore",
       "typeVersion": 1,
       "position": [
-        900,
-        200
+        960,
+        300
       ],
       "parameters": {
-        "operation": "checkDuplicates",
-        "key": "={{$json.game_id}}",
-        "value": "={{JSON.stringify({price: $json.price, discount: $json.discount})}}"
+        "operation": "get",
+        "key": "={{$json.dealID}}",
+        "storeName": "steam_deal_notified"
       }
     },
     {
-      "id": "set",
-      "name": "Format Post",
-      "type": "n8n-nodes-base.set",
-      "typeVersion": 3,
+      "id": "if-duplicate",
+      "name": "If Duplicate",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
       "position": [
-        1100,
+        1140,
+        300
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "exists",
+              "leftValue": "={{$json[\"Data Store Get\"].value}}",
+              "rightValue": "",
+              "operator": {
+                "type": "exists",
+                "operation": "exists"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "discord-webhook",
+      "name": "Discord Webhook",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        1320,
         200
       ],
       "parameters": {
-        "assignments": {
-          "assignments": [
+        "url": "={{$env.DISCORD_WEBHOOK_URL}}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
             {
-              "id": "title",
-              "name": "title",
-              "value": "={{$json.title}}",
-              "type": "string"
-            },
-            {
-              "id": "price_info",
-              "name": "price_info",
-              "value": "=${{$json.original_price}} → ${{$json.final_price}} (−{{$json.discount_percent}}%) / Until {{$json.discount_end_time}}",
-              "type": "string"
-            },
-            {
-              "id": "why_worth_it",
-              "name": "why_worth_it",
-              "value": "=Rating: {{$json.rating}}%, Historical Low: ${{$json.historical_low_price}} ({{$json.historical_low_discount}}% off)",
-              "type": "string"
+              "name": "Content-Type",
+              "value": "application/json"
             }
           ]
         },
-        "options": {}
+        "sendQuery": false,
+        "httpHeaderAuth": "={{{\"name\":\"\",\"value\":\"\"}}}",
+        "options": {
+          "timeout": 10000
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "content",
+              "value": "={{$json.notificationContent}}"
+            }
+          ]
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "discord-placeholder",
+          "name": "Discord Webhook Placeholder"
+        }
+      }
+    },
+    {
+      "id": "data-store-set",
+      "name": "Data Store Set",
+      "type": "n8n-nodes-base.dataStore",
+      "typeVersion": 1,
+      "position": [
+        1500,
+        200
+      ],
+      "parameters": {
+        "operation": "set",
+        "key": "={{$json.dealID}}",
+        "value": "={{new Date().toISOString()}}",
+        "storeName": "steam_deal_notified"
       }
     }
   ],
@@ -145,51 +210,84 @@
       "main": [
         [
           {
-            "node": "Get Price API",
+            "node": "Fetch Deals",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Get Price API": {
+    "Fetch Deals": {
       "main": [
         [
           {
-            "node": "Filter Games",
+            "node": "Filter and Format",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Filter Games": {
+    "Filter and Format": {
       "main": [
         [
           {
-            "node": "Check Historical Low",
+            "node": "Split In Batches",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Check Historical Low": {
+    "Split In Batches": {
       "main": [
         [
           {
-            "node": "Deduplicate by Game ID",
+            "node": "Data Store Get",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Deduplicate by Game ID": {
+    "Data Store Get": {
       "main": [
         [
           {
-            "node": "Format Post",
+            "node": "If Duplicate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Duplicate": {
+      "main": [
+        [
+          {
+            "node": "Discord Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Discord Webhook": {
+      "main": [
+        [
+          {
+            "node": "Data Store Set",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Data Store Set": {
+      "main": [
+        [
+          {
+            "node": "Split In Batches",
             "type": "main",
             "index": 0
           }
