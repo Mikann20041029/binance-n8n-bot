@@ -1,10 +1,88 @@
-ワークフローA：Steam“Worth It Only”
-	1.	Cron：15分
-	2.	HTTP：価格API取得
-	3.	Function：フィルタ（割引/価格/評価/レビュー数）
-	4.	HTTP：履歴APIで過去最安判定
-	5.	Data Store：game_id + price + discount で重複排除
-	6.	Set：投稿整形（3行）
-	•	タイトル
-	•	$X → $Y (−Z%) / いつまで
-	•	Why Worth It（評価・最安根拠）
+あなたはn8nのワークフローJSONを生成する専門家です。
+次の要件を満たす「n8nにインポート可能なworkflow JSON（1つ）」を、JSONだけで出力してください。説明文・コードブロック・前置き・注釈は禁止。出力はJSONオブジェクト1つのみ。
+
+# 目的
+Steamのセール情報をCheapShark APIから取得し、条件に合うものだけDiscordに通知する。
+重複通知は絶対にしない（同じdealIDは1回だけ通知）。
+
+# 重要な制約
+- 外部DBや有料APIは使わない
+- CheapShark API（https://www.cheapshark.com/api/1.0/）のみを使う（APIキー不要）
+- DiscordはWebhook送信のみ（Bot権限不要）
+- 取得・フィルタ・重複排除・通知がすべて自動で回ること
+- n8n標準ノードのみで構成（Community node禁止）
+- ワークフローはインポートしてすぐ動かせる形（資格情報はプレースホルダ）
+
+# 環境変数（JSON内にそのまま参照させる）
+- DISCORD_WEBHOOK_URL : Discord webhook URL
+- CURRENCY : "USD" （固定でもよい）
+- TZ : "Asia/Tokyo" （固定でもよい）
+
+# スケジュール
+- Cronで15分ごとに実行
+
+# 取得（CheapShark）
+CheapSharkの/deals を使用し、Steamのみ取得する
+- storeID=1（Steam）
+- pageSize=60
+- sortBy=Deal Rating か Savings か Price（どれでも良いが合理的に）
+- onSale=1
+- upperPrice=5（$5以下）
+- 必要ならAAA=0（任意）
+- 可能ならsteamRating=1を付けてSteam評価情報を含める（CheapSharkが返す場合）
+
+HTTP RequestノードでGETし、レスポンスはJSONとして扱う。
+
+# フィルタ条件（厳格）
+取得した各dealについて、以下を全て満たすものだけ「通知対象」とする:
+1) savings（割引率）>= 90
+2) salePrice <= 5
+3) steamRatingText が "Very Positive" または "Overwhelmingly Positive"
+4) steamRatingCount >= 1000
+5) 「過去最安級」判定:
+   - cheapsharkのレスポンスに cheapestPrice がある場合、salePrice == cheapestPrice のものだけ通す
+   - cheapestPriceが無い場合はこの条件をスキップし、(1)-(4)だけで通す
+
+条件を満たさないdealは破棄。
+
+# 重複排除（必須）
+- 同じ dealID は二度と通知しない
+- n8nの「Data Store」ノード（または同等の永続手段）を使用し、dealIDをキーとして保存する
+- 具体:
+  - まず dealID をキーに Data Store Get
+  - 既に存在するなら通知しない（除外）
+  - 存在しない場合のみ通知し、直後に Data Store Set で保存する
+- 保存するvalueは、実行時刻ISO文字列で十分
+- Data Store名は "steam_deal_notified" など固定文字列で良い
+
+# Discord通知（Webhook）
+- Discord WebhookへPOST（HTTP RequestノードでOK）
+- 送信形式は content で十分（Embedでも良いが必須ではない）
+- contentに含める文字列（1件あたり1投稿）:
+  - ゲーム名（title）
+  - salePrice / normalPrice / savings%
+  - Steam評価: steamRatingText と steamRatingCount
+  - Dealリンク: https://www.cheapshark.com/redirect?dealID={dealID}
+  - 可能なら Steamストアリンク（steamAppIDがあれば https://store.steampowered.com/app/{steamAppID}/ ）
+
+# ロギング（任意だが推奨）
+- 通知件数（今回何件送ったか）を最後にまとめて出せるようにしても良い
+- ただしDiscord通知は1件1投稿を優先（まとめ投稿は不要）
+
+# ノード構成の希望（必須ではないが推奨）
+1) Cron
+2) HTTP Request (CheapShark /deals)
+3) Function or Code (フィルタ + 整形)
+4) Split In Batches（1件ずつ処理）
+5) Data Store Get
+6) IF（既出判定）
+7) Discord Webhook POST（HTTP Request）
+8) Data Store Set
+9) 次のバッチへ
+
+# 出力ルール
+- n8nがインポートできる完全なworkflow JSONを1つだけ出力
+- JSONは正しい構文で、末尾のカンマ禁止
+- nodes と connections が正しく接続され、実行順が成立していること
+- credentialsはプレースホルダで良い（Webhookは環境変数参照）
+- 余計な文章は一切出さない
